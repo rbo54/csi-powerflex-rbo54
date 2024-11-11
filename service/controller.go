@@ -168,6 +168,13 @@ func (s *service) CreateVolume(
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+	// Replace this with data from the configuration file
+	// that maps zone names to arrayID/storagePool as in the examples below.
+	// This is a map of zone to the arrayID and pool identifier
+	zoneTargetMap := make(map[string]string)
+	zoneTargetMap["zoneA"] = "205f819048a7000f/pool1"
+	zoneTargetMap["zoneB"] = "1102ecb40dadf70f/poll1"
+	zoneTargetMap["zoneC"] = "fa6960ff6dc6cd0f/poll1"
 
 	Log := getLogger(ctx)
 	if md.IsMDStorageClass(params) {
@@ -175,16 +182,15 @@ func (s *service) CreateVolume(
 	}
 
 	systemID, err := s.getSystemIDFromParameters(params)
-	if err != nil {
-		return nil, err
+	if systemID == "" {
+		Log.Infof("systemID not specified in parameters")
 	}
-
-	if err := s.requireProbe(ctx, systemID); err != nil {
-		return nil, err
+	if systemID != "" {
+		if err := s.requireProbe(ctx, systemID); err != nil {
+			return nil, err
+		}
 	}
-
 	s.logStatistics()
-
 	cr := req.GetCapacityRange()
 
 	// Check for filesystem type
@@ -203,9 +209,50 @@ func (s *service) CreateVolume(
 		Log.Printf("Received CreateVolume request without accessibility keys")
 	}
 
-	var volumeTopology []*csi.Topology
+	// Look for zone topology
+	zoneTopology := false
 	systemSegments := map[string]string{} // topology segments matching requested system for a volume
-	if accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+	var volumeTopology []*csi.Topology
+
+	// Handle Zone topology, which happens when node is annotated with "Zone" label
+	if systemID == "" && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
+		var zoneName string
+		segments := accessibility.GetPreferred()[0].GetSegments()
+		for key, value := range segments {
+			Log.Infof("accessibility preferred segment key %s value %s", key, value)
+			if strings.HasPrefix(key, "zone."+Name) {
+				var storagePool string
+				zoneName = value
+				zoneTarget := zoneTargetMap[zoneName]
+				if zoneTarget == "" {
+					Log.Infof("no zone target for %s", zoneTarget)
+					continue
+				}
+				parts := strings.Split(zoneTarget, "/")
+				systemID = parts[0]
+				if len(parts) >= 2 {
+					storagePool = parts[1]
+				} else {
+					storagePool = "defaulPool"
+				}
+				systemSegments["zone."+Name] = zoneName
+				volumeTopology = append(volumeTopology, &csi.Topology{
+					Segments: systemSegments,
+				})
+				Log.Infof("Preferred topology zone %s systemID %s storageClass %s", zoneName, systemID, storagePool)
+				zoneTopology = true
+				if err := s.requireProbe(ctx, systemID); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	if systemID == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "no systemID supplied or inferred from Zone")
+	}
+
+	if !zoneTopology && accessibility != nil && len(accessibility.GetPreferred()) > 0 {
 		requestedSystem := ""
 		sID := ""
 		system := s.systems[systemID]
@@ -267,6 +314,7 @@ func (s *service) CreateVolume(
 			Log.Printf("Accessible topology for volume: %s, segments: %#v", req.GetName(), systemSegments)
 		}
 	}
+	Log.Infof("volume topology: %+v", volumeTopology)
 
 	if len(req.VolumeCapabilities) != 0 {
 		if req.VolumeCapabilities[0].GetBlock() != nil {
@@ -738,18 +786,21 @@ func (s *service) getSystemIDFromParameters(params map[string]string) (string, e
 	}
 
 	// systemID not found in storage class params, use the default array
-	if systemID == "" {
-		if s.opts.defaultSystemID != "" {
-			systemID = s.opts.defaultSystemID
-		} else if len(s.opts.arrays) == 1 {
-			for id := range s.opts.arrays { // use the only provided array
-				systemID = id
-			}
-		} else {
-			return "", status.Errorf(codes.FailedPrecondition, "No system ID is found in parameters or as default")
-		}
-	}
+	// if systemID == "" {
+	// 	if s.opts.defaultSystemID != "" {
+	// 		systemID = s.opts.defaultSystemID
+	// 	} else if len(s.opts.arrays) == 1 {
+	// 		for id := range s.opts.arrays { // use the only provided array
+	// 			systemID = id
+	// 		}
+	// 	} else {
+	// 		return "", status.Errorf(codes.FailedPrecondition, "No system ID is found in parameters or as default")
+	// 	}
+	// }
 	Log.Printf("getSystemIDFromParameters system %s", systemID)
+	if systemID == "" {
+		return "", nil
+	}
 
 	// if name set for array.SystemID use id instead
 	// names can change , id will remain unique
