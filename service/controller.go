@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dell/csi-nfs/nfs"
 	"github.com/dell/csi-vxflexos/v2/k8sutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -75,6 +76,9 @@ const (
 	// volume create parameters map
 	KeyFsType = "fsType"
 
+	// KeyRWXNFS indicates we want all RWX volumes to be NFS. Used for the csi-nfs plugin.
+	KeyRWXNFS = "RWXNFS"
+
 	// NFSExportLocalPath is the local path for NFSExport
 	NFSExportLocalPath = "/"
 
@@ -118,6 +122,9 @@ const (
 	// VolumeIDList is the list of volume IDs
 	VolumeIDList = "VolumeIDList"
 
+	// Parameter tag for CSI-NFS in the storage class
+	CsiNfsParameter = "csi-nfs"
+
 	removeModeOnlyMe                    = "ONLY_ME"
 	sioGatewayNotFound                  = "Not found"
 	sioGatewayVolumeNotFound            = "Could not find the volume"
@@ -157,7 +164,7 @@ const (
 // These parameters are copied from the StorageClass parameters to the VolumeContext. The replication ones are used by the node for identifying replicated volumes.
 var interestingParameters = [...]string{0: "FsType", 1: KeyMkfsFormatOption, 2: KeyBandwidthLimitInKbps, 3: KeyIopsLimit,
 	4: KeyReplicationPrefix + KeyReplicationConsistencyGroupName, 5: KeyReplicationPrefix + KeyReplicationEnabled, 6: KeyReplicationPrefix + KeyReplicationClusterID,
-	7: KeyReplicationPrefix + KeyReplicationRemoteSystem}
+	7: KeyReplicationPrefix + KeyReplicationRemoteSystem, 8: KeyRWXNFS, 9: CsiNfsParameter}
 
 func (s *service) CreateVolume(
 	ctx context.Context,
@@ -165,10 +172,21 @@ func (s *service) CreateVolume(
 	*csi.CreateVolumeResponse, error,
 ) {
 	params := req.GetParameters()
+	if params[CsiNfsParameter] != "" {
+		// Right now no dependence on isRWXAccessMode so can test easily
+		//if isRWXAccessMode(req) {
+		params[CsiNfsParameter] = "RWX"
+		//} else {
+		//params[CsiNfsParameter] = ""
+		//}
+	}
 
 	Log := getLogger(ctx)
 	if md.IsMDStorageClass(params) {
 		return mdsvc.CreateVolume(ctx, req)
+	}
+	if nfs.IsNFSStorageClass(params) {
+		return nfssvc.CreateVolume(ctx, req)
 	}
 
 	systemID, err := s.getSystemIDFromParameters(params)
@@ -984,6 +1002,9 @@ func (s *service) DeleteVolume(
 	if md.IsMDVolumeID(csiVolID) {
 		return mdsvc.DeleteVolume(ctx, req)
 	}
+	if nfs.IsNFSVolumeID(csiVolID) {
+		csiVolID = nfs.NFSToArrayVolumeID(csiVolID)
+	}
 
 	isNFS := strings.Contains(csiVolID, "/")
 	// ensure no ambiguity if legacy vol
@@ -1255,6 +1276,10 @@ func (s *service) ControllerPublishVolume(
 
 	if md.IsMDVolumeID(csiVolID) {
 		return mdsvc.ControllerPublishVolume(ctx, req)
+	}
+	if nfs.IsNFSVolumeID(csiVolID) {
+		Log.Infof("csi-nfs: RWX calling nfssvc.ControllerPublishVolume")
+		return nfssvc.ControllerPublishVolume(ctx, req)
 	}
 
 	// get systemID from req
@@ -1591,6 +1616,10 @@ func (s *service) ControllerUnpublishVolume(
 	if md.IsMDVolumeID(req.GetVolumeId()) {
 		return mdsvc.ControllerUnpublishVolume(ctx, req)
 	}
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		Log.Info("csi-nfs: calling nfssrv.Controller.UnpublishVolume")
+		return nfssvc.ControllerUnpublishVolume(ctx, req)
+	}
 
 	// get systemID from req
 	systemID := s.getSystemIDFromCsiVolumeID(req.GetVolumeId())
@@ -1718,6 +1747,9 @@ func (s *service) ValidateVolumeCapabilities(
 	req *csi.ValidateVolumeCapabilitiesRequest) (
 	*csi.ValidateVolumeCapabilitiesResponse, error,
 ) {
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
+	}
 	csiVolID := req.GetVolumeId()
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
@@ -2571,6 +2603,9 @@ func (s *service) CreateSnapshot(
 	*csi.CreateSnapshotResponse, error,
 ) {
 	// Validate snapshot volume
+	if nfs.IsNFSSnapshotID(req.GetSourceVolumeId()) {
+		req.SourceVolumeId = nfs.NFSToArrayVolumeID(req.GetSourceVolumeId())
+	}
 	csiVolID := req.GetSourceVolumeId()
 	if csiVolID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "CSI volume ID to be snapped is required")
@@ -2807,6 +2842,9 @@ func (s *service) DeleteSnapshot(
 	req *csi.DeleteSnapshotRequest) (
 	*csi.DeleteSnapshotResponse, error,
 ) {
+	if nfs.IsNFSSnapshotID(req.GetSnapshotId()) {
+		req.SnapshotId = nfs.NFSToArrayVolumeID(req.GetSnapshotId())
+	}
 	// Display any secrets passed in
 	secrets := req.GetSecrets()
 	for k, v := range secrets {
@@ -2978,6 +3016,9 @@ func (s *service) ControllerExpandVolume(ctx context.Context, req *csi.Controlle
 		}
 	}
 
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
+	}
 	csiVolID := req.GetVolumeId()
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
@@ -3288,6 +3329,9 @@ func (s *service) Clone(req *csi.CreateVolumeRequest,
 // returns volume condition if found else returns not found
 func (s *service) ControllerGetVolume(_ context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
 	abnormal := false
+	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
+		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
+	}
 	csiVolID := req.GetVolumeId()
 	if csiVolID == "" {
 		return nil, status.Error(codes.InvalidArgument,
@@ -3544,4 +3588,16 @@ func (s *service) verifySystem(systemID string) (*goscaleio.Client, error) {
 	}
 
 	return adminClient, nil
+}
+
+func isRWXAccessMode(req *csi.CreateVolumeRequest) bool {
+	capabilities := req.GetVolumeCapabilities()
+	for _, capability := range capabilities {
+		accessMode := capability.GetAccessMode()
+		if accessMode.Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER {
+			Log.Infof("csi-nfs RWX volume request")
+			return true
+		}
+	}
+	return false
 }
