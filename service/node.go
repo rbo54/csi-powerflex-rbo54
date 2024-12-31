@@ -1,4 +1,3 @@
-// Copyright © 2019-2024 Dell Inc. or its subsidiaries. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +40,6 @@ var (
 	publishGetMappedVolMaxRetry   = 30
 	unpublishGetMappedVolMaxRetry = 5
 	getMappedVolDelay             = (1 * time.Second)
-	nfsExportsDirectory           = "/nfs/exports"
 
 	// GetNodeLabels - Get the node labels
 	GetNodeLabels = getNodelabels
@@ -1125,9 +1123,12 @@ func getNodeUID(ctx context.Context, s *service) (string, error) {
 // and returns that staging path or an error. This is used by csinfs.
 // Note the volumeId here is an NFS volume id prepended with nfs-.
 func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDirectory string) (string, error) {
-	Log.Infof("MountVolume called volumeId %s", volumeId)
+	Log.Infof("MountVolume called volumeId %s nfsExportDirectory %s", volumeId, nfsExportDirectory)
 	if volumeId == "" {
 		return "", fmt.Errorf("mountVolume: volumeId was empty")
+	}
+	if nfsExportDirectory == "" {
+		nfsExportDirectory = "/nfs/vxflexos"
 	}
 	systemId := s.getSystemIDFromCsiVolumeID(volumeId)
 	systemId = strings.Replace(systemId, "nfs-", "", 1)
@@ -1144,10 +1145,7 @@ func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDi
 	if err != nil {
 		return "", fmt.Errorf("mountVolume: getSDCMappedVol returned error %s", err)
 	}
-	if nfsExportDirectory == "" {
-		nfsExportDirectory = "/nfs/exports"
-	}
-	target := nfsExportsDirectory + "/" + volumeId
+	target := nfsExportDirectory + "/" + volumeId
 	Log.Infof("target %s", target)
 	if _, err := mkdir(target); err != nil {
 		return "", err
@@ -1166,8 +1164,9 @@ func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDi
 }
 
 func (s *service) UnmountVolume(ctx context.Context, volumeId, nfsExportDirectory string) error {
+	Log.Info("UnmountVolume called volumeId %s nfsExportDirectory %s", volumeId, nfsExportDirectory)
 	if nfsExportDirectory == "" {
-		nfsExportDirectory = "/nfs/exports"
+		nfsExportDirectory = "/nfs/vxflexos"
 	}
 	target := nfsExportDirectory + "/" + volumeId
 	Log.Infof("calling gofsutil.Unmount %s", target)

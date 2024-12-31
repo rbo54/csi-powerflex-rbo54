@@ -33,6 +33,10 @@ func New() gocsi.StoragePluginProvider {
 	nfssvc := nfs.New(service.Name)
 	service.PutNfsService(nfssvc)
 	nfs.PutVcsiService(svc)
+	nfs.DriverName = service.Name
+	nfs.DriverNamespace = service.DriverNamespace
+	nfs.NodeRoot = "/noderoot"
+	nfs.NfsExportDirectory = "/nfs/vxflexos"
 	return &gocsi.StoragePlugin{
 		Controller:                svc,
 		Identity:                  svc,
