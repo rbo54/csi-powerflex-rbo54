@@ -182,11 +182,11 @@ func (s *service) CreateVolume(
 	}
 
 	Log := getLogger(ctx)
-	if md.IsMDStorageClass(params) {
-		return mdsvc.CreateVolume(ctx, req)
-	}
 	if nfs.IsNFSStorageClass(params) {
 		return nfssvc.CreateVolume(ctx, req)
+	}
+	if md.IsMDStorageClass(params) {
+		return mdsvc.CreateVolume(ctx, req)
 	}
 
 	systemID, err := s.getSystemIDFromParameters(params)
@@ -999,11 +999,11 @@ func (s *service) DeleteVolume(
 	}
 
 	Log := getLogger(ctx)
-	if md.IsMDVolumeID(csiVolID) {
-		return mdsvc.DeleteVolume(ctx, req)
-	}
 	if nfs.IsNFSVolumeID(csiVolID) {
 		csiVolID = nfs.NFSToArrayVolumeID(csiVolID)
+	}
+	if md.IsMDVolumeID(csiVolID) {
+		return mdsvc.DeleteVolume(ctx, req)
 	}
 
 	isNFS := strings.Contains(csiVolID, "/")
@@ -1274,12 +1274,12 @@ func (s *service) ControllerPublishVolume(
 			"volume ID is required")
 	}
 
-	if md.IsMDVolumeID(csiVolID) {
-		return mdsvc.ControllerPublishVolume(ctx, req)
-	}
 	if nfs.IsNFSVolumeID(csiVolID) {
 		Log.Infof("csi-nfs: RWX calling nfssvc.ControllerPublishVolume")
 		return nfssvc.ControllerPublishVolume(ctx, req)
+	}
+	if md.IsMDVolumeID(csiVolID) {
+		return mdsvc.ControllerPublishVolume(ctx, req)
 	}
 
 	// get systemID from req
@@ -1613,12 +1613,12 @@ func (s *service) ControllerUnpublishVolume(
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	Log := getLogger(ctx)
-	if md.IsMDVolumeID(req.GetVolumeId()) {
-		return mdsvc.ControllerUnpublishVolume(ctx, req)
-	}
 	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
 		Log.Info("csi-nfs: calling nfssrv.Controller.UnpublishVolume")
 		return nfssvc.ControllerUnpublishVolume(ctx, req)
+	}
+	if md.IsMDVolumeID(req.GetVolumeId()) {
+		return mdsvc.ControllerUnpublishVolume(ctx, req)
 	}
 
 	// get systemID from req

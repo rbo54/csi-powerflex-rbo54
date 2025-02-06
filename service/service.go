@@ -148,7 +148,7 @@ type Service interface {
 	RegisterAdditionalServers(server *grpc.Server)
 	ProcessMapSecretChange() error
 	VolumeIDToArrayID(string) string
-	MountVolume(context.Context, string, string, string) (string, error)
+	MountVolume(context.Context, string, string, string, map[string]string) (string, error)
 	UnmountVolume(context.Context, string, string) error
 }
 

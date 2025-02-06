@@ -1122,7 +1122,7 @@ func getNodeUID(ctx context.Context, s *service) (string, error) {
 // The fsType and nfsExport directory are optional arguments.
 // and returns that staging path or an error. This is used by csinfs.
 // Note the volumeId here is an NFS volume id prepended with nfs-.
-func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDirectory string) (string, error) {
+func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDirectory string, exportNfsContext map[string]string) (string, error) {
 	Log.Infof("MountVolume called volumeId %s nfsExportDirectory %s", volumeId, nfsExportDirectory)
 	if volumeId == "" {
 		return "", fmt.Errorf("mountVolume: volumeId was empty")
@@ -1156,7 +1156,11 @@ func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDi
 	}
 	err = gofsutil.FormatAndMount(ctx, sdcMappedVol.SdcDevice, target, fsType)
 	if err != nil {
-		return "", fmt.Errorf("mountVolume: gofsutil.Mount %s %s failed: %s", sdcMappedVol.SdcDevice, target, err)
+		if strings.Contains(err.Error(), "already mounted on") {
+			Log.Infof("%s ... continuing", err.Error())
+		} else {
+			return "", fmt.Errorf("mountVolume: gofsutil.Mount %s %s failed: %s", sdcMappedVol.SdcDevice, target, err)
+		}
 	}
 	Log.Infof("mountVolume %s %s successful", sdcMappedVol.SdcDevice, target)
 
@@ -1164,7 +1168,7 @@ func (s *service) MountVolume(ctx context.Context, volumeId, fsType, nfsExportDi
 }
 
 func (s *service) UnmountVolume(ctx context.Context, volumeId, nfsExportDirectory string) error {
-	Log.Info("UnmountVolume called volumeId %s nfsExportDirectory %s", volumeId, nfsExportDirectory)
+	Log.Infof("UnmountVolume called volumeId %s nfsExportDirectory %s", volumeId, nfsExportDirectory)
 	if nfsExportDirectory == "" {
 		nfsExportDirectory = "/nfs/vxflexos"
 	}
