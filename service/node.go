@@ -23,7 +23,7 @@ import (
 	"time"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/dell/csi-md/md"
+	//"github.com/dell/csi-md/md"
 	"github.com/dell/csi-nfs/nfs"
 	"github.com/dell/gofsutil"
 	"github.com/dell/goscaleio"
@@ -55,9 +55,9 @@ func (s *service) NodeStageVolume(
 	req *csi.NodeStageVolumeRequest) (
 	*csi.NodeStageVolumeResponse, error) {
 
-	if md.IsMDVolumeID(req.GetVolumeId()) {
-		return mdsvc.NodeStageVolume(ctx, req)
-	}
+//	if md.IsMDVolumeID(req.GetVolumeId()) {
+//		return mdsvc.NodeStageVolume(ctx, req)
+//	}
 	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
 		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
 	}
@@ -73,9 +73,9 @@ func (s *service) NodeUnstageVolume(
 	req *csi.NodeUnstageVolumeRequest) (
 	*csi.NodeUnstageVolumeResponse, error) {
 
-	if md.IsMDVolumeID(req.GetVolumeId()) {
-		return mdsvc.NodeUnstageVolume(ctx, req)
-	}
+//	if md.IsMDVolumeID(req.GetVolumeId()) {
+//		return mdsvc.NodeUnstageVolume(ctx, req)
+//	}
 	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
 		req.VolumeId = nfs.NFSToArrayVolumeID(req.GetVolumeId())
 	}
@@ -137,22 +137,22 @@ func (s *service) NodePublishVolume(
 	}
 
 	Log := getLogger(ctx)
-	if md.IsMDVolumeID(req.GetVolumeId()) {
-		// md requires a call to NodeStageVolume before node publish. The current csi-powerflex driver does not
-		// specify use of NODE_STAGE_UNSTAGE, so it needs to be called manually here.
-		nodeStageRequest := &csi.NodeStageVolumeRequest{
-			VolumeId:          req.VolumeId,
-			StagingTargetPath: getPrivateMountPoint(s.privDir, req.VolumeId),
-			PublishContext:    req.PublishContext,
-			VolumeCapability:  req.VolumeCapability,
-			VolumeContext:     req.VolumeContext,
-		}
-		_, err := mdsvc.NodeStageVolume(ctx, nodeStageRequest)
-		if err != nil {
-			return nil, fmt.Errorf("NodeStageVolume failed, ID: %s, error: %s", req.VolumeId, err.Error())
-		}
-		return mdsvc.NodePublishVolume(ctx, req)
-	}
+//	if md.IsMDVolumeID(req.GetVolumeId()) {
+//		// md requires a call to NodeStageVolume before node publish. The current csi-powerflex driver does not
+//		// specify use of NODE_STAGE_UNSTAGE, so it needs to be called manually here.
+//		nodeStageRequest := &csi.NodeStageVolumeRequest{
+//			VolumeId:          req.VolumeId,
+//			StagingTargetPath: getPrivateMountPoint(s.privDir, req.VolumeId),
+//			PublishContext:    req.PublishContext,
+//			VolumeCapability:  req.VolumeCapability,
+//			VolumeContext:     req.VolumeContext,
+//		}
+//		_, err := mdsvc.NodeStageVolume(ctx, nodeStageRequest)
+//		if err != nil {
+//			return nil, fmt.Errorf("NodeStageVolume failed, ID: %s, error: %s", req.VolumeId, err.Error())
+//		}
+//		return mdsvc.NodePublishVolume(ctx, req)
+//	}
 
 	var reqID string
 	headers, ok := metadata.FromIncomingContext(ctx)
@@ -298,20 +298,20 @@ func (s *service) NodeUnpublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "A target path argument is required")
 	}
 
-	if md.IsMDVolumeID(req.GetVolumeId()) {
-		_, err := mdsvc.NodeUnpublishVolume(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("NodeUnpublishVolume failed: ID: %s, error: %s", req.VolumeId, err.Error())
-		}
-		// csi-powerflex doesn't implement NODE_STAGE_UNSTAGE, but md requires NodeUnstage. Call it here.
-		nodeUnstageRequest := &csi.NodeUnstageVolumeRequest{
-			VolumeId:          req.VolumeId,
-			StagingTargetPath: getPrivateMountPoint(s.privDir, req.VolumeId),
-		}
-		_, err = mdsvc.NodeUnstageVolume(ctx, nodeUnstageRequest)
-		resp := &csi.NodeUnpublishVolumeResponse{}
-		return resp, err
-	}
+//	if md.IsMDVolumeID(req.GetVolumeId()) {
+//		_, err := mdsvc.NodeUnpublishVolume(ctx, req)
+//		if err != nil {
+//			return nil, fmt.Errorf("NodeUnpublishVolume failed: ID: %s, error: %s", req.VolumeId, err.Error())
+//		}
+//		// csi-powerflex doesn't implement NODE_STAGE_UNSTAGE, but md requires NodeUnstage. Call it here.
+//		nodeUnstageRequest := &csi.NodeUnstageVolumeRequest{
+//			VolumeId:          req.VolumeId,
+//			StagingTargetPath: getPrivateMountPoint(s.privDir, req.VolumeId),
+//		}
+//		_, err = mdsvc.NodeUnstageVolume(ctx, nodeUnstageRequest)
+//		resp := &csi.NodeUnpublishVolumeResponse{}
+//		return resp, err
+//	}
 
 	s.logStatistics()
 

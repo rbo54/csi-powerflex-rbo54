@@ -29,7 +29,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/dell/csi-md/md"
+	//"github.com/dell/csi-md/md"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -182,12 +182,15 @@ func (s *service) CreateVolume(
 	}
 
 	Log := getLogger(ctx)
+//	if md.IsMDStorageClass(params) {
+//		return mdsvc.CreateVolume(ctx, req)
+//	}
 	if nfs.IsNFSStorageClass(params) {
 		return nfssvc.CreateVolume(ctx, req)
 	}
-	if md.IsMDStorageClass(params) {
-		return mdsvc.CreateVolume(ctx, req)
-	}
+//	if md.IsMDStorageClass(params) {
+//		return mdsvc.CreateVolume(ctx, req)
+//	}
 
 	systemID, err := s.getSystemIDFromParameters(params)
 	if err != nil {
@@ -999,12 +1002,15 @@ func (s *service) DeleteVolume(
 	}
 
 	Log := getLogger(ctx)
+//	if md.IsMDVolumeID(csiVolID) {
+//		return mdsvc.DeleteVolume(ctx, req)
+//	}
 	if nfs.IsNFSVolumeID(csiVolID) {
 		csiVolID = nfs.NFSToArrayVolumeID(csiVolID)
 	}
-	if md.IsMDVolumeID(csiVolID) {
-		return mdsvc.DeleteVolume(ctx, req)
-	}
+//	if md.IsMDVolumeID(csiVolID) {
+//		return mdsvc.DeleteVolume(ctx, req)
+//	}
 
 	isNFS := strings.Contains(csiVolID, "/")
 	// ensure no ambiguity if legacy vol
@@ -1274,13 +1280,16 @@ func (s *service) ControllerPublishVolume(
 			"volume ID is required")
 	}
 
+//	if md.IsMDVolumeID(csiVolID) {
+//		return mdsvc.ControllerPublishVolume(ctx, req)
+//	}
 	if nfs.IsNFSVolumeID(csiVolID) {
 		Log.Infof("csi-nfs: RWX calling nfssvc.ControllerPublishVolume")
 		return nfssvc.ControllerPublishVolume(ctx, req)
 	}
-	if md.IsMDVolumeID(csiVolID) {
-		return mdsvc.ControllerPublishVolume(ctx, req)
-	}
+//	if md.IsMDVolumeID(csiVolID) {
+//		return mdsvc.ControllerPublishVolume(ctx, req)
+//	}
 
 	// get systemID from req
 	systemID := s.getSystemIDFromCsiVolumeID(csiVolID)
@@ -1613,13 +1622,16 @@ func (s *service) ControllerUnpublishVolume(
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	Log := getLogger(ctx)
+//	if md.IsMDVolumeID(req.GetVolumeId()) {
+//		return mdsvc.ControllerUnpublishVolume(ctx, req)
+//	}
 	if nfs.IsNFSVolumeID(req.GetVolumeId()) {
 		Log.Info("csi-nfs: calling nfssrv.Controller.UnpublishVolume")
 		return nfssvc.ControllerUnpublishVolume(ctx, req)
 	}
-	if md.IsMDVolumeID(req.GetVolumeId()) {
-		return mdsvc.ControllerUnpublishVolume(ctx, req)
-	}
+//	if md.IsMDVolumeID(req.GetVolumeId()) {
+//		return mdsvc.ControllerUnpublishVolume(ctx, req)
+//	}
 
 	// get systemID from req
 	systemID := s.getSystemIDFromCsiVolumeID(req.GetVolumeId())
@@ -2610,9 +2622,9 @@ func (s *service) CreateSnapshot(
 	if csiVolID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "CSI volume ID to be snapped is required")
 	}
-	if md.IsMDVolumeID(csiVolID) {
-		return mdsvc.CreateSnapshot(ctx, req)
-	}
+//	if md.IsMDVolumeID(csiVolID) {
+//		return mdsvc.CreateSnapshot(ctx, req)
+//	}
 
 	//ensure no ambiguity if legacy vol
 	err := s.checkVolumesMap(csiVolID)
@@ -2856,9 +2868,9 @@ func (s *service) DeleteSnapshot(
 	if csiSnapID == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "snapshot ID to be deleted is required")
 	}
-	if md.IsMDSnapID(csiSnapID) {
-		return mdsvc.DeleteSnapshot(ctx, req)
-	}
+//	if md.IsMDSnapID(csiSnapID) {
+//		return mdsvc.DeleteSnapshot(ctx, req)
+//	}
 
 	isNFS := strings.Contains(csiSnapID, "/")
 

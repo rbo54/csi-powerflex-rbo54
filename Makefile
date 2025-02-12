@@ -34,7 +34,7 @@ dependencies:
 
 # Build the driver locally
 build: dependencies
-	(cd csi-md; make build)
+	#(cd csi-md; make build)
 	(cd csi-nfs; make build)
 	CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build
 

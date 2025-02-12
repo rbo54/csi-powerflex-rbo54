@@ -14,7 +14,7 @@
 package provider
 
 import (
-	"github.com/dell/csi-md/md"
+	//"github.com/dell/csi-md/md"
 	nfs "github.com/dell/csi-nfs/nfs"
 	"github.com/dell/csi-vxflexos/v2/service"
 	"github.com/dell/gocsi"
@@ -27,9 +27,9 @@ var Log = logrus.New()
 // New returns a new Mock Storage Plug-in Provider.
 func New() gocsi.StoragePluginProvider {
 	svc := service.New()
-	mdsvc := md.New(service.Name)
-	service.PutMDService(mdsvc)
-	md.PutVcsiService(svc)
+	//mdsvc := md.New(service.Name)
+	//service.PutMDService(mdsvc)
+	//md.PutVcsiService(svc)
 	nfssvc := nfs.New(service.Name)
 	service.PutNfsService(nfssvc)
 	nfs.PutVcsiService(svc)
